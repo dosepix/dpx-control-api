@@ -11,6 +11,7 @@ def create_app(test_config=None):
         DATABASE=os.path.join(app.instance_path, "dosepix.sqlite"),
     )
 
+    # Init database
     from . import db
     db.init_app(app)
 

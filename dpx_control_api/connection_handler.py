@@ -1,5 +1,26 @@
-import dpx_func_python
+import dpx_func_python as dpx
 import serial.tools.list_ports
+
+'''
+class Singleton:
+    def __init__(self, decorated):
+        self._decorated = decorated
+
+    def instance(self):
+        try:
+            return self._instance
+        except AttributeError:
+            self._instance = self._decorated()
+            return self._instance
+
+    def __call__(self):
+        raise TypeError('Singletons must be accessed through `instance()`.')
+
+    def __instancecheck__(self, inst):
+        return isinstance(inst, self._decorated)
+
+@Singleton
+'''
 
 class Connection_handler:
     def __init__(self):
@@ -17,11 +38,16 @@ class Connection_handler:
                 return 'Select port first'
 
             try:
-                self.dpx = dpx_func_python.Dosepix(self.port, self.baud, self.config)
+                self.dpx = dpx.Dosepix(self.port, self.baud, self.config)
                 # dpx_func_python.Dosepix(PORT, 2e6, CONFIG_FN, thl_calib_files=thl_calib_files, params_file=PARAMS_FILES, bin_edges_file=BIN_EDGES_FILES)
-            except:
-                return False
+            except PermissionError as err:
+                return 403
             return True
+
+    def disconnect(self):
+        self.dpx.close()
+        self.dpx = None
+        return True
 
     def is_connected(self):
         if self.dpx is not None:
@@ -37,6 +63,7 @@ class Connection_handler:
         self.baud = baud
 
     def set_port(self, port):
+        print(port)
         self.port = port
 
     def set_config(self, config):
@@ -48,4 +75,4 @@ class Connection_handler:
         print(self.ports)
         return self.ports
 
-connection_handler = Connection_handler();
+connection_handler = Connection_handler()
