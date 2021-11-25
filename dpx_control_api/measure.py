@@ -18,18 +18,21 @@ def random_histogram(bins):
         y[idx] += 1
         yield y
 
-HIST_GEN = None
+# === GLOBALS ===
+GENERATOR = None
 HIST = None
-MEASURING = False
+MEASURING = None
+
+# === MEASURE ToT ===
 @bp.route('/tot', methods=["POST", "GET", "DELETE"])
 def measure_tot():
     db = get_db()
-    global HIST_GEN
+    global GENERATOR
     global HIST
 
     # Start measurement
     if request.method == "GET":
-        HIST_GEN = ch.dpx.measureToT(slot=1, use_gui=True)
+        GENERATOR = ch.dpx.measureToT(slot=1, use_gui=True)
         HIST = np.zeros((256, 400))
         # hist_gen = random_histogram(np.arange(400))   # Debug
         return Response("Measurement started", status=201, mimetype='application/json')
@@ -38,8 +41,8 @@ def measure_tot():
     small_pixels = np.asarray([True if pixel % 16 in [0, 1, 14, 15] else False for pixel in np.arange(256)])
     if request.method == "POST":
         bins = np.arange(400)
-        if HIST_GEN is not None:
-            frame = np.asarray( next( HIST_GEN ) )
+        if GENERATOR is not None:
+            frame = np.asarray( next( GENERATOR ) )
 
             # Get rid of zeros and large values
             frame_filt = np.array(frame, copy=True)
@@ -70,9 +73,63 @@ def measure_tot():
 
     # Stop measurement
     if request.method == "DELETE":
-        if HIST_GEN is not None:
+        if GENERATOR is not None:
             try:
-                HIST_GEN.close()
+                GENERATOR.close()
             except:
-                HIST_GEN = None
+                GENERATOR = None
         return Response("Measurement stopped", status=201, mimetype='application/json')
+
+# === THL CALIBRATION ===
+@bp.route('/thl_calib', methods=["POST", "GET", "DELETE"])
+def thl_calib():
+    db = get_db()
+    global GENERATOR
+
+    if request.method == "GET":
+        GENERATOR = ch.dpx.measureADC(1, AnalogOut='V_ThA', perc=False, ADChigh=8191, ADClow=0, ADCstep=1, N=1, fn=None, plot=False, use_gui=True)
+        return Response("Calibration started", status=201, mimetype='application/json')
+
+    if request.method == "POST":
+        if GENERATOR is not None:
+            try:
+                res = next( GENERATOR )
+            except StopIteration:
+                return Response('finished', status=410, mimetype='application/json')
+            return Response(json.dumps(res), status=201, mimetype='application/json')
+
+    if request.method == "DELETE":
+        if GENERATOR is not None:
+            try:
+                GENERATOR.close()
+            except:
+                GENERATOR = None
+        return Response("THL Calibration stopped", status=201, mimetype='application/json')
+
+# === EQUALIZATION ===
+@bp.route('/equal', methods=["POST", "GET", "DELETE"])
+def equalization():
+    db = get_db()
+    global GENERATOR
+
+    # Create equalization generator
+    if request.method == "GET":
+        GENERATOR = ch.dpx.thresholdEqualization(slot=1, reps=1, THL_offset=20, I_pixeldac=None, intPlot=False, resPlot=False, use_gui=True)
+        return Response("Equalization started", status=201, mimetype='application/json')
+
+    if request.method == "POST":
+        if GENERATOR is not None:
+            try:
+                res = next( GENERATOR )
+                print( res )
+            except StopIteration:
+                return Response('finished', status=410, mimetype='application/json')
+            return Response(json.dumps(res), status=201, mimetype='application/json')
+
+    if request.method == "DELETE":
+        if GENERATOR is not None:
+            try:
+                GENERATOR.close()
+            except:
+                GENERATOR = None
+        return Response("Equalization stopped", status=201, mimetype='application/json')

@@ -30,9 +30,11 @@ def create_app(test_config=None):
 
     from . import control
     from . import user
+    from . import config
     from . import measure
     app.register_blueprint(control.bp)
     app.register_blueprint(user.bp)
+    app.register_blueprint(config.bp)
     app.register_blueprint(measure.bp)
 
     return app

@@ -1,4 +1,6 @@
+from serial.serialutil import SerialException
 import dpx_func_python as dpx
+from serial import SerialException
 import serial.tools.list_ports
 
 '''
@@ -34,14 +36,15 @@ class Connection_handler:
     # === CONNECTION STATE ===
     def connect(self):
         if not self.is_connected():
-            if self.port is None:
-                return 'Select port first'
+            # Port or baud rate missing
+            if (self.port is None) or (self.baud is None):
+                return 400
 
             try:
                 self.dpx = dpx.Dosepix(self.port, self.baud, self.config)
                 # dpx_func_python.Dosepix(PORT, 2e6, CONFIG_FN, thl_calib_files=thl_calib_files, params_file=PARAMS_FILES, bin_edges_file=BIN_EDGES_FILES)
-            except PermissionError as err:
-                return 403
+            except SerialException as err:
+                return 503
             return True
 
     def disconnect(self):
