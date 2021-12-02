@@ -194,9 +194,9 @@ def get_thl_calib_id():
 # Set THL calibration to Dosepix
 @bp.route('/set_thl_calib', methods=["GET"])
 def set_thl_calib():
-    config_id = request.args.get('config_id', default=-1, type=int)
-    ret = get_thl_calib_from_id(config_id)
-    print(config_id)
+    thl_calib_id = request.args.get('id', default=-1, type=int)
+    ret = get_thl_calib_from_id(thl_calib_id)
+    print(thl_calib_id)
     print(ret)
 
     # Check if query results in data

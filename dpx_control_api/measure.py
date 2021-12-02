@@ -122,8 +122,8 @@ def equalization():
             try:
                 res = next( GENERATOR )
                 print( res )
-            except StopIteration:
-                return Response('finished', status=410, mimetype='application/json')
+            except StopIteration as excp:
+                return Response(json.dumps(excp), status=200, mimetype='application/json')
             return Response(json.dumps(res), status=201, mimetype='application/json')
 
     if request.method == "DELETE":
