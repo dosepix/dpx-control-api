@@ -15,7 +15,6 @@ setup(name='dpx_gui',
     install_requires=[
         'flask',
         'matplotlib',
-        'hickle',
         'pandas',
         'numpy',
         'scipy',
@@ -23,5 +22,5 @@ setup(name='dpx_gui',
         'pyyaml',
         'configparser',
         'tqdm',
-        'dpx_func_python'
+        'dpx_control'
     ])

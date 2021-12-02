@@ -1,5 +1,5 @@
 from serial.serialutil import SerialException
-import dpx_func_python as dpx
+import dpx_control as dpx
 from serial import SerialException
 import serial.tools.list_ports
 
@@ -42,7 +42,7 @@ class Connection_handler:
 
             try:
                 self.dpx = dpx.Dosepix(self.port, self.baud, self.config)
-                # dpx_func_python.Dosepix(PORT, 2e6, CONFIG_FN, thl_calib_files=thl_calib_files, params_file=PARAMS_FILES, bin_edges_file=BIN_EDGES_FILES)
+                # dpx_control.Dosepix(PORT, 2e6, CONFIG_FN, thl_calib_files=thl_calib_files, params_file=PARAMS_FILES, bin_edges_file=BIN_EDGES_FILES)
             except SerialException as err:
                 return 503
             return True
