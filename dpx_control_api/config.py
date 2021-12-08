@@ -196,8 +196,6 @@ def get_thl_calib_id():
 def set_thl_calib():
     thl_calib_id = request.args.get('id', default=-1, type=int)
     ret = get_thl_calib_from_id(thl_calib_id)
-    print(thl_calib_id)
-    print(ret)
 
     # Check if query results in data
     if not ret['Volt']:
@@ -210,3 +208,19 @@ def set_thl_calib():
     # Set THL edges of DPX
     ch.dpx.load_THLEdges(ret)
     return Response("Succesfully set THL calibration", status=201, mimetype='application/json')
+
+# === Equalization ===
+@bp.route('/get_equal_ids_names', methods=["GET"])
+def get_equal_ids_names():
+    db = get_db()
+
+    if 'config_id' in request.args:
+        config_id = request.args.get('config_id', type=int)
+        ret = db.execute(
+            'SELECT id, name FROM equal WHERE (config_id) IS (?)', (config_id,)).fetchall()
+        ret = [dict(r) for r in ret]
+        if not ret:
+            return Response("No entries found", status=404, mimetype='application/json')
+    else:
+        return Response("config_id is required", status=406, mimetype='application/json')
+    return Response(json.dumps(ret), status=201, mimetype='application/json')
