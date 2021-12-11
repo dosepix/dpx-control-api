@@ -15,6 +15,7 @@ CREATE TABLE user (
 
 CREATE TABLE measurement (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
     config_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     mode TEXT NOT NULL,

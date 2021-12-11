@@ -23,6 +23,45 @@ GENERATOR = None
 HIST = None
 MEASURING = None
 
+# === COMMON ===
+@bp.route('/new_measurement', methods=["POST"])
+def new_measurement():
+    db = get_db()
+    data = request.json
+
+    # Check if required data is provided
+    if not all([key in data.keys() for key in ['config_id', 'user_id', 'mode', 'name']]):
+        return Response("Required keys are missing", status=400, mimetype='application/json')
+
+    try:
+        db.execute(
+            "INSERT INTO measurement (config_id, user_id, mode, name) VALUES (?, ?, ?, ?)", 
+            (data['config_id'], data['user_id'], data['mode'], data['name']))
+        db.commit()
+    except db.IntegrityError as error:
+        return Response(error, status=409, mimetype='application/json')
+
+    meas_id = db.execute("SELECT last_insert_rowid() FROM measurement").fetchone()
+    meas_id = list(dict(meas_id).values())[0]
+    return Response(json.dumps({'meas_id': meas_id}), status=201, mimetype='application/json')
+
+@bp.route('/get_meas_ids_names', methods=["GET"])
+def get_meas_ids_names():
+    db = get_db()
+
+    if ('user_id' in request.args) and ('mode' in request.args):
+        user_id = request.args.get('user_id', type=int)
+        mode = request.args.get('mode', type=int)
+
+        ret = db.execute(
+            'SELECT id, name FROM measurement WHERE (user_id, mode) IS (?, ?)', (user_id, 'tot')).fetchall()
+        ret = [dict(r) for r in ret]
+        if not ret:
+            return Response("No entries found", status=404, mimetype='application/json')
+    else:
+        return Response("user_id is required", status=406, mimetype='application/json')
+    return Response(json.dumps(ret), status=201, mimetype='application/json')
+
 # === MEASURE ToT ===
 @bp.route('/tot', methods=["POST", "GET", "DELETE"])
 def measure_tot():
@@ -58,10 +97,12 @@ def measure_tot():
                     hist_show = np.sum(HIST[~small_pixels], axis=0).tolist()
                 elif show == "small":
                     hist_show = np.sum(HIST[small_pixels], axis=0).tolist()
+                # Show single pixels
                 elif show == "single":
+                    # If no pixels were selected, return empty
                     if not request.json['pixels']:
                         return Response(json.dumps({'bins': bins.tolist(), 'frame': np.zeros(400).tolist()}), status=200, mimetype='application/json')
-                    hist_show = np.sum(HIST[np.asarray(request.json['pixels'])]).tolist()
+                    hist_show = np.sum(HIST[np.asarray(request.json['pixels'])], axis=0).tolist()
                 else:
                     hist_show = np.sum(HIST, axis=0).tolist()
             else:
@@ -123,7 +164,7 @@ def equalization():
                 res = next( GENERATOR )
                 print( res )
             except StopIteration as excp:
-                return Response(json.dumps(excp), status=200, mimetype='application/json')
+                return Response(json.dumps(excp.value), status=200, mimetype='application/json')
             return Response(json.dumps(res), status=201, mimetype='application/json')
 
     if request.method == "DELETE":

@@ -19,7 +19,6 @@ setup(name='dpx_gui',
         'numpy',
         'scipy',
         'pyserial',
-        'pyyaml',
         'configparser',
         'tqdm',
         'dpx_control'

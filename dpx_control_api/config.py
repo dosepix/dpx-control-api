@@ -224,3 +224,48 @@ def get_equal_ids_names():
     else:
         return Response("config_id is required", status=406, mimetype='application/json')
     return Response(json.dumps(ret), status=201, mimetype='application/json')
+
+@bp.route('/new_equal', methods=["POST"])
+def new_equal():
+    db = get_db()
+    data = request.json
+    print(data)
+
+    # Check if required data is provided
+    if not all([key in data.keys() for key in ['config_id', 'name', 'v_tha', 'pixeldac', 'confbits']]):
+        return Response("Required keys are missing", status=400, mimetype='application/json')
+
+    try:
+        db.execute(
+            "INSERT INTO equal (config_id, name, v_tha, confbits, pixeldac) VALUES (?, ?, ?, ?, ?)", (data['config_id'], data['name'], data['v_tha'], data['pixeldac'], data['confbits']))
+        db.commit()
+    except db.IntegrityError as error:
+        return Response(error, status=409, mimetype='application/json')
+
+    equal_id = db.execute("SELECT last_insert_rowid() FROM equal").fetchone()
+    equal_id = list(dict(equal_id).values())[0]
+    return Response(json.dumps({'equal_id': equal_id}), status=201, mimetype='application/json')
+
+def get_equal_from_id(equal_id):
+    db = get_db()
+
+    # Query data
+    data = db.execute(
+        'SELECT v_tha, confbits, pixeldac FROM equal WHERE (equal_id) IS (?)', (equal_id,)).fetchone()
+    if not data:
+        return Response('Equalization nto found', status=404, mimetype='application/json')
+    data = dict(data)
+    return data
+
+@bp.route('/set_equal', methods=["GET"])
+def set_equal():
+    equal_id = request.args.get('id', default=-1, type=int)
+    ret = get_equal_from_id(equal_id)
+
+    # Check if device is connected
+    if not ch.is_connected():
+        return Response("No device connected", status=404, mimetype='application/json')
+
+    # Set THL edges of DPX
+    ch.dpx.load_THLEdges(ret)
+    return Response("Succesfully set THL calibration", status=201, mimetype='application/json')
