@@ -19,6 +19,7 @@ def random_histogram(bins):
         yield y
 
 # === GLOBALS ===
+FRAME_ID = 0
 GENERATOR = None
 HIST = None
 MEASURING = None
@@ -28,6 +29,7 @@ MEASURING = None
 def new_measurement():
     db = get_db()
     data = request.json
+    global FRAME_ID
 
     # Check if required data is provided
     if not all([key in data.keys() for key in ['config_id', 'user_id', 'mode', 'name']]):
@@ -43,6 +45,9 @@ def new_measurement():
 
     meas_id = db.execute("SELECT last_insert_rowid() FROM measurement").fetchone()
     meas_id = list(dict(meas_id).values())[0]
+
+    # Counter for current frame
+    FRAME_ID = 0
     return Response(json.dumps({'meas_id': meas_id}), status=201, mimetype='application/json')
 
 @bp.route('/get_meas_ids_names', methods=["GET"])
@@ -51,21 +56,22 @@ def get_meas_ids_names():
 
     if ('user_id' in request.args) and ('mode' in request.args):
         user_id = request.args.get('user_id', type=int)
-        mode = request.args.get('mode', type=int)
+        mode = request.args.get('mode', type=str)
 
         ret = db.execute(
-            'SELECT id, name FROM measurement WHERE (user_id, mode) IS (?, ?)', (user_id, 'tot')).fetchall()
+            'SELECT id, name FROM measurement WHERE (user_id, mode) IS (?, ?)', (user_id, mode)).fetchall()
         ret = [dict(r) for r in ret]
         if not ret:
             return Response("No entries found", status=404, mimetype='application/json')
     else:
-        return Response("user_id is required", status=406, mimetype='application/json')
+        return Response("user_id and mode are required", status=406, mimetype='application/json')
     return Response(json.dumps(ret), status=201, mimetype='application/json')
 
 # === MEASURE ToT ===
 @bp.route('/tot', methods=["POST", "GET", "DELETE"])
 def measure_tot():
     db = get_db()
+    global FRAME_ID
     global GENERATOR
     global HIST
 
@@ -91,7 +97,7 @@ def measure_tot():
             for px in pixel_hits:
                 HIST[px][frame_filt[px]] += 1
 
-            if request.json is not None:
+            if 'show' in request.json.keys():
                 show = request.json['show']
                 if show == "large":
                     hist_show = np.sum(HIST[~small_pixels], axis=0).tolist()
@@ -107,8 +113,17 @@ def measure_tot():
                     hist_show = np.sum(HIST, axis=0).tolist()
             else:
                 hist_show = np.sum(HIST, axis=0).tolist()
-            # hist_show = HIST[7].tolist()
 
+            # Store in database
+            if request.json['mode'] != 'tot_hist':
+                insert_list = []
+                for idx in np.argwhere(frame > 0).flatten():
+                    insert_list.append( (request.json['meas_id'], FRAME_ID, idx.item(), frame[idx].item()) )
+                db.executemany("INSERT INTO totmode (measurement_id, frame_id, pixel_id, value) VALUES (?, ?, ?, ?)", insert_list)
+                db.commit()
+                FRAME_ID += 1
+
+            # Return histogram
             return Response(json.dumps({'bins': bins.tolist(), 'frame': hist_show}), status=200, mimetype='application/json')
         return Response("Measurement not started", status=405, mimetype='application/json')
 
@@ -120,6 +135,33 @@ def measure_tot():
             except:
                 GENERATOR = None
         return Response("Measurement stopped", status=201, mimetype='application/json')
+
+@bp.route('/tot_hist', methods=["POST", "GET"])
+def tot_save_hist():
+    db = get_db()
+
+    if request.method == "GET":
+        meas_id = request.args.get('meas_id', type=int)
+
+        data = db.execute(
+            'SELECT * FROM totmode_hist WHERE (measurement_id) IS (?)', (meas_id,)
+        ).fetchall()
+        data = json.dumps( [dict(d) for d in data] )
+        return Response(data, status=200, mimetype='application/json')
+
+    if request.method == "POST":
+        bins, hist = request.json['bins'], request.json['hist']
+
+        # Store in database
+        insert_list = []
+        for idx in range(len(bins)):
+            insert_list.append( (request.json['meas_id'], bins[idx], hist[idx]) )
+        db.executemany("INSERT INTO totmode_hist (measurement_id, bin, value) VALUES (?, ?, ?)", insert_list)
+        db.commit()
+
+        # Return histogram
+        return Response("Stored ToT histogram", status=201, mimetype='application/json')
+    return Response("Bad ToT histogram request", status=400, mimetype='application/json')
 
 # === THL CALIBRATION ===
 @bp.route('/thl_calib', methods=["POST", "GET", "DELETE"])
