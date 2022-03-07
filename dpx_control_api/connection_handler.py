@@ -1,7 +1,7 @@
-from serial.serialutil import SerialException
-import dpx_control as dpx
 from serial import SerialException
 import serial.tools.list_ports
+
+import dpx_control as dpx
 
 class Connection_handler:
     def __init__(self):
@@ -10,7 +10,6 @@ class Connection_handler:
         self.port = None
         self.baud = 2e6
         self.config = None
-        return
 
     # === CONNECTION STATE ===
     def connect(self):

@@ -1,6 +1,10 @@
 import os
 from flask import Flask
 
+def main():
+    app = create_app()
+    app.run()
+
 def create_app(test_config=None):
     """Create and configure an instance of the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
@@ -38,3 +42,6 @@ def create_app(test_config=None):
     app.register_blueprint(measure.bp)
 
     return app
+
+if __name__ == "__main__":
+    main()

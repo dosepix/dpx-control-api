@@ -1,25 +1,35 @@
-from setuptools import setup
+import setuptools
 
-setup(name='dpx_gui',
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+setuptools.setup(name='dpx_control_api',
     version='0.1',
-    description='DPX gui',
+    description='API for DPX control software',
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     author='Sebastian Schmidt',
     author_email='schm.seb@gmail.com',
-    license='MIT',
-    packages=['dpx_gui'],
+    url="https://github.com/dosepix/dpx-control-api",
+    project_urls={
+        "Bug Tracker": "https://github.com/dosepix/dpx-control-api/issues",
+    },
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "Operating System :: OS Independent",
+    ],
+    license='GNU GPLv3',
+    packages=['dpx_control_api'],
     entry_points={
         'console_scripts' : [
-            'dpx_gui = dpx_gui.dpx_gui:main',
+            'dpx_control_api = dpx_control_api.__init__:main',
         ]
     },
     install_requires=[
         'flask',
-        'matplotlib',
         'pandas',
         'numpy',
-        'scipy',
-        'pyserial',
-        'configparser',
-        'tqdm',
         'dpx_control'
-    ])
+    ]
+)

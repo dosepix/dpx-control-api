@@ -1,12 +1,12 @@
-import numpy as np
 import time
-import functools
 import json
+
+import numpy as np
 import flask
 from flask import request, Response
-from .db import get_db
 
-from connection_handler import connection_handler as ch
+from .db import get_db
+from .connection_handler import connection_handler as ch
 
 # Create blueprint
 bp = flask.Blueprint('measure', __name__, url_prefix='/measure')
@@ -20,9 +20,15 @@ def random_histogram(bins):
 
 # === GLOBALS ===
 FRAME_ID = 0
-GENERATOR = None
-HIST = None
 MEASURING = None
+
+# ToT
+TOT_GENERATOR = None
+TOT_HIST = None
+
+# Dosi
+DOSI_GENERATOR = None
+DOSI_HIST = None
 
 # === COMMON ===
 @bp.route('/new_measurement', methods=["POST"])
@@ -71,23 +77,27 @@ def get_meas_ids_names():
 @bp.route('/tot', methods=["POST", "GET", "DELETE"])
 def measure_tot():
     db = get_db()
+    bins = np.arange(400)
     global FRAME_ID
-    global GENERATOR
-    global HIST
+    global TOT_GENERATOR
+    global TOT_HIST
 
     # Start measurement
     if request.method == "GET":
-        GENERATOR = ch.dpx.measureToT(slot=1, use_gui=True)
-        HIST = np.zeros((256, 400))
+        FRAME_ID = 0
+        TOT_GENERATOR = ch.dpx.measureToT(slot=1, use_gui=True)
+        TOT_HIST = np.zeros((256, 400))
         # hist_gen = random_histogram(np.arange(400))   # Debug
         return Response("Measurement started", status=201, mimetype='application/json')
 
     # Get events
     small_pixels = np.asarray([True if pixel % 16 in [0, 1, 14, 15] else False for pixel in np.arange(256)])
     if request.method == "POST":
-        bins = np.arange(400)
-        if GENERATOR is not None:
-            frame = np.asarray( next( GENERATOR ) )
+        if TOT_GENERATOR is not None:
+            # TODO
+            # save = request.args.get('save', type=str)
+            # If true, save ToT values to db
+            frame = np.asarray( next( TOT_GENERATOR ) )
 
             # Get rid of zeros and large values
             frame_filt = np.array(frame, copy=True)
@@ -95,24 +105,24 @@ def measure_tot():
 
             pixel_hits = np.argwhere(frame_filt > 0).flatten()
             for px in pixel_hits:
-                HIST[px][frame_filt[px]] += 1
+                TOT_HIST[px][frame_filt[px]] += 1
 
             if 'show' in request.json.keys():
                 show = request.json['show']
                 if show == "large":
-                    hist_show = np.sum(HIST[~small_pixels], axis=0).tolist()
+                    hist_show = np.sum(TOT_HIST[~small_pixels], axis=0).tolist()
                 elif show == "small":
-                    hist_show = np.sum(HIST[small_pixels], axis=0).tolist()
+                    hist_show = np.sum(TOT_HIST[small_pixels], axis=0).tolist()
                 # Show single pixels
                 elif show == "single":
                     # If no pixels were selected, return empty
                     if not request.json['pixels']:
                         return Response(json.dumps({'bins': bins.tolist(), 'frame': np.zeros(400).tolist()}), status=200, mimetype='application/json')
-                    hist_show = np.sum(HIST[np.asarray(request.json['pixels'])], axis=0).tolist()
+                    hist_show = np.sum(TOT_HIST[np.asarray(request.json['pixels'])], axis=0).tolist()
                 else:
-                    hist_show = np.sum(HIST, axis=0).tolist()
+                    hist_show = np.sum(TOT_HIST, axis=0).tolist()
             else:
-                hist_show = np.sum(HIST, axis=0).tolist()
+                hist_show = np.sum(TOT_HIST, axis=0).tolist()
 
             # Store in database
             if request.json['mode'] != 'tot_hist':
@@ -129,39 +139,120 @@ def measure_tot():
 
     # Stop measurement
     if request.method == "DELETE":
-        if GENERATOR is not None:
+        if TOT_GENERATOR is not None:
             try:
-                GENERATOR.close()
+                TOT_GENERATOR.close()
+                TOT_GENERATOR = None
             except:
-                GENERATOR = None
+                TOT_GENERATOR = None
+
+        meas_id = request.args.get('meas_id', type=int)
+        if TOT_HIST is not None:
+            res = save_tot_hist(bins, TOT_HIST, meas_id)
+            if not res:
+                return Response("Failed to store ToT histogram to db", status=500, mimetype='application/json')
+
+        TOT_HIST = None
         return Response("Measurement stopped", status=201, mimetype='application/json')
 
-@bp.route('/tot_hist', methods=["POST", "GET"])
-def tot_save_hist():
+def save_tot_hist(bins, hist, meas_id):
+    db = get_db()
+
+    try:
+        # Loop over all pixels
+        for pixel_id, h in enumerate( hist ):
+            # Store in database
+
+            insert_list = np.dstack( [[meas_id]*len(bins), [pixel_id]*len(bins), bins, h] )[0]
+            db.executemany("INSERT INTO totmode_hist (measurement_id, pixel_id, bin, value) VALUES (?, ?, ?, ?)", insert_list)
+            db.commit()
+    except:
+        return False
+    return True
+
+@bp.route('/tot_hist', methods=["GET"])
+def tot_hist():
     db = get_db()
 
     if request.method == "GET":
         meas_id = request.args.get('meas_id', type=int)
+        pixel_id = request.args.get('pixel_id', type=int)
 
         data = db.execute(
-            'SELECT * FROM totmode_hist WHERE (measurement_id) IS (?)', (meas_id,)
+            'SELECT * FROM totmode_hist WHERE (measurement_id, pixel_id) IS (?, ?)', (meas_id, pixel_id)
         ).fetchall()
         data = json.dumps( [dict(d) for d in data] )
         return Response(data, status=200, mimetype='application/json')
-
-    if request.method == "POST":
-        bins, hist = request.json['bins'], request.json['hist']
-
-        # Store in database
-        insert_list = []
-        for idx in range(len(bins)):
-            insert_list.append( (request.json['meas_id'], bins[idx], hist[idx]) )
-        db.executemany("INSERT INTO totmode_hist (measurement_id, bin, value) VALUES (?, ?, ?)", insert_list)
-        db.commit()
-
-        # Return histogram
-        return Response("Stored ToT histogram", status=201, mimetype='application/json')
     return Response("Bad ToT histogram request", status=400, mimetype='application/json')
+
+# === MEASURE DOSI ===
+@bp.route('/dosi', methods=["POST", "GET", "DELETE"])
+def measure_dosi():
+    db = get_db()
+    bins = np.arange(400)
+    global FRAME_ID
+    global DOSI_GENERATOR
+    global DOSI_HIST
+
+    # Start measurement
+    if request.method == "GET":
+        FRAME_ID = 0
+        frames = request.args.get('frames', default=-1, type=int)
+        frame_time = request.args.get('frame_time', default=10, type=int)
+
+        # Infinite measurement
+        if frames <= 0:
+            frames = None
+        DOSI_GENERATOR = ch.dpx.measureDose(slot=1, frame_time=frame_time, frames=frames, 
+                                            freq=False, outFn=None, logTemp=False, intPlot=False, 
+                                            conversion_factors=None, use_gui=False)
+        DOSI_HIST = []
+        return Response("Measurement started", status=201, mimetype='application/json')
+
+    # Get events
+    small_pixels = np.asarray([True if pixel % 16 in [0, 1, 14, 15] else False for pixel in np.arange(256)])
+    if request.method == "POST":
+        if DOSI_GENERATOR is not None:
+            frame = np.asarray( next( DOSI_GENERATOR ) )
+            DOSI_HIST.append( frame )
+            print( frame )
+
+            if 'show' in request.json.keys():
+                show = request.json['show']
+                if show == "large":
+                    hist_show = np.sum(DOSI_HIST, axis=0)[~small_pixels].tolist()
+                elif show == "small":
+                    hist_show = np.sum(DOSI_HIST, axis=0)[small_pixels].tolist()
+                # Show single pixels
+                elif show == "single":
+                    # If no pixels were selected, return empty
+                    if not request.json['pixels']:
+                        return Response(json.dumps({}), status=200, mimetype='application/json')
+                    hist_show = np.sum(DOSI_HIST, axis=0)[np.asarray(request.json['pixels'])].tolist()
+                else:
+                    hist_show = np.sum(DOSI_HIST, axis=0).tolist()
+            else:
+                hist_show = np.sum(DOSI_HIST, axis=0).tolist()
+
+            # Store in database
+            if request.json['mode'] == 'dosi':
+                db.execute("INSERT INTO dosimode (measurement_id, frame_id, %s) VALUES (%s)" % (', '.join(['bin%d' % b for b in range(16)]), ', '.join(['?'] * 18)), [request.json['meas_id'], FRAME_ID] + np.sum(frame, axis=0).tolist())
+                db.commit()
+                FRAME_ID += 1
+
+            # Return histogram
+            return Response(json.dumps({'bins': bins.tolist(), 'frame': hist_show}), status=200, mimetype='application/json')
+        return Response("Measurement not started", status=405, mimetype='application/json')
+
+    # Stop measurement
+    if request.method == "DELETE":
+        if DOSI_GENERATOR is not None:
+            try:
+                DOSI_GENERATOR.close()
+                DOSI_GENERATOR = None
+            except:
+                DOSI_GENERATOR = None
+        return Response("Measurement stopped", status=201, mimetype='application/json')
 
 # === THL CALIBRATION ===
 @bp.route('/thl_calib', methods=["POST", "GET", "DELETE"])

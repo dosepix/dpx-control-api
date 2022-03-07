@@ -1,7 +1,7 @@
 import flask
 from flask import g, current_app, request, Response
 
-from connection_handler import connection_handler as ch
+from .connection_handler import connection_handler as ch
 
 # Create blueprint
 bp = flask.Blueprint('control', __name__, url_prefix='/control')

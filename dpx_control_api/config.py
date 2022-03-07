@@ -2,9 +2,10 @@ import functools
 import json
 import flask
 from flask import request, Response
+from flask import config
 from .db import get_db
 
-from connection_handler import connection_handler as ch
+from .connection_handler import connection_handler as ch
 
 # Create blueprint
 bp = flask.Blueprint('config', __name__, url_prefix='/config')
@@ -251,21 +252,21 @@ def get_equal_from_id(equal_id):
 
     # Query data
     data = db.execute(
-        'SELECT v_tha, confbits, pixeldac FROM equal WHERE (equal_id) IS (?)', (equal_id,)).fetchone()
+        'SELECT v_tha, confbits, pixeldac FROM equal WHERE (id) IS (?)', (equal_id,)).fetchone()
     if not data:
-        return Response('Equalization nto found', status=404, mimetype='application/json')
+        return Response('Equalization not found', status=404, mimetype='application/json')
     data = dict(data)
     return data
 
 @bp.route('/set_equal', methods=["GET"])
 def set_equal():
-    equal_id = request.args.get('id', default=-1, type=int)
-    ret = get_equal_from_id(equal_id)
+    equal_id = request.args.get('equal_id', default=-1, type=int)
+    config = get_equal_from_id(equal_id)
 
     # Check if device is connected
     if not ch.is_connected():
         return Response("No device connected", status=404, mimetype='application/json')
 
-    # Set THL edges of DPX
-    ch.dpx.load_THLEdges(ret)
-    return Response("Succesfully set THL calibration", status=201, mimetype='application/json')
+    # Set results of equalization
+    ch.dpx.setConfig_gui(config)
+    return Response("Succesfully set equalization", status=201, mimetype='application/json')
