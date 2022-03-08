@@ -6,6 +6,7 @@ from flask import config
 from .db import get_db
 
 from .connection_handler import connection_handler as ch
+from . import SINGLE_HW
 
 # Create blueprint
 bp = flask.Blueprint('config', __name__, url_prefix='/config')
@@ -207,7 +208,10 @@ def set_thl_calib():
         return Response("No device connected", status=404, mimetype='application/json')
 
     # Set THL edges of DPX
-    ch.dpx.load_THLEdges(ret)
+    if SINGLE_HW:
+        ch.dpx.load_THLEdges(ret)
+    else:
+        ch.dpx.load_thl_edges(ret)
     return Response("Succesfully set THL calibration", status=201, mimetype='application/json')
 
 # === Equalization ===
@@ -268,5 +272,8 @@ def set_equal():
         return Response("No device connected", status=404, mimetype='application/json')
 
     # Set results of equalization
-    ch.dpx.setConfig_gui(config)
+    if SINGLE_HW:
+        ch.dpx.set_config_gui(config)
+    else:
+        ch.dpx.setConfig_gui(config)
     return Response("Succesfully set equalization", status=201, mimetype='application/json')

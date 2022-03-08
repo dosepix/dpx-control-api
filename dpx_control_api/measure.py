@@ -8,6 +8,8 @@ from flask import request, Response
 from .db import get_db
 from .connection_handler import connection_handler as ch
 
+from . import SINGLE_HW
+
 # Create blueprint
 bp = flask.Blueprint('measure', __name__, url_prefix='/measure')
 
@@ -85,27 +87,32 @@ def measure_tot():
     # Start measurement
     if request.method == "GET":
         FRAME_ID = 0
-        TOT_GENERATOR = ch.dpx.measureToT(slot=1, use_gui=True)
+        if SINGLE_HW:
+            TOT_GENERATOR = ch.dpx.dpf.measure_tot(use_gui=True)
+        else:
+            TOT_GENERATOR = ch.dpx.measureToT(slot=1, use_gui=True)
         TOT_HIST = np.zeros((256, 400))
         # hist_gen = random_histogram(np.arange(400))   # Debug
         return Response("Measurement started", status=201, mimetype='application/json')
 
     # Get events
-    small_pixels = np.asarray([True if pixel % 16 in [0, 1, 14, 15] else False for pixel in np.arange(256)])
+    small_pixels = np.asarray(
+        [pixel % 16 in [0, 1, 14, 15] for pixel in np.arange(256)])
     if request.method == "POST":
         if TOT_GENERATOR is not None:
             # TODO
             # save = request.args.get('save', type=str)
             # If true, save ToT values to db
-            frame = np.asarray( next( TOT_GENERATOR ) )
+            frame = next( TOT_GENERATOR )
+            frame = np.asarray( frame )
 
             # Get rid of zeros and large values
             frame_filt = np.array(frame, copy=True)
             frame_filt[frame_filt > bins[-1]] = 0
 
             pixel_hits = np.argwhere(frame_filt > 0).flatten()
-            for px in pixel_hits:
-                TOT_HIST[px][frame_filt[px]] += 1
+            for pixel in pixel_hits:
+                TOT_HIST[pixel][frame_filt[pixel]] += 1
 
             if 'show' in request.json.keys():
                 show = request.json['show']
@@ -117,8 +124,14 @@ def measure_tot():
                 elif show == "single":
                     # If no pixels were selected, return empty
                     if not request.json['pixels']:
-                        return Response(json.dumps({'bins': bins.tolist(), 'frame': np.zeros(400).tolist()}), status=200, mimetype='application/json')
-                    hist_show = np.sum(TOT_HIST[np.asarray(request.json['pixels'])], axis=0).tolist()
+                        return Response(
+                            json.dumps({
+                                    'bins': bins.tolist(),
+                                    'frame': np.zeros(400).tolist()
+                                }),
+                            status=200, mimetype='application/json')
+                    hist_show = np.sum(
+                        TOT_HIST[np.asarray(request.json['pixels'])], axis=0).tolist()
                 else:
                     hist_show = np.sum(TOT_HIST, axis=0).tolist()
             else:
@@ -128,14 +141,23 @@ def measure_tot():
             if request.json['mode'] != 'tot_hist':
                 insert_list = []
                 for idx in np.argwhere(frame > 0).flatten():
-                    insert_list.append( (request.json['meas_id'], FRAME_ID, idx.item(), frame[idx].item()) )
+                    insert_list.append(
+                        (request.json['meas_id'], FRAME_ID, idx.item(),
+                        frame[idx].item())
+                    )
                 db.executemany("INSERT INTO totmode (measurement_id, frame_id, pixel_id, value) VALUES (?, ?, ?, ?)", insert_list)
                 db.commit()
                 FRAME_ID += 1
 
             # Return histogram
-            return Response(json.dumps({'bins': bins.tolist(), 'frame': hist_show}), status=200, mimetype='application/json')
-        return Response("Measurement not started", status=405, mimetype='application/json')
+            return Response(
+                json.dumps({
+                    'bins': bins.tolist(),
+                    'frame': hist_show}),
+                status=200, mimetype='application/json')
+        return Response("Measurement not started",
+            status=405,
+            mimetype='application/json')
 
     # Stop measurement
     if request.method == "DELETE":
@@ -288,7 +310,20 @@ def equalization():
 
     # Create equalization generator
     if request.method == "GET":
-        GENERATOR = ch.dpx.thresholdEqualization(slot=1, reps=1, THL_offset=20, I_pixeldac=None, intPlot=False, resPlot=False, use_gui=True)
+        if SINGLE_HW:
+            GENERATOR = ch.dpx.equal.threshold_equalization(
+                use_gui=True
+            )
+        else:
+            GENERATOR = ch.dpx.thresholdEqualization(
+                slot=1,
+                reps=1,
+                THL_offset=20,
+                I_pixeldac=None,
+                intPlot=False,
+                resPlot=False,
+                use_gui=True
+            )
         return Response("Equalization started", status=201, mimetype='application/json')
 
     if request.method == "POST":

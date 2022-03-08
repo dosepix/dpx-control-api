@@ -1,7 +1,11 @@
 from serial import SerialException
 import serial.tools.list_ports
 
-import dpx_control as dpx
+from . import SINGLE_HW
+if SINGLE_HW:
+    import dpx_control_hw as dpx
+else:
+    import dpx_control as dpx
 
 class Connection_handler:
     def __init__(self):
@@ -15,12 +19,22 @@ class Connection_handler:
     def connect(self):
         if not self.is_connected():
             # Port or baud rate missing
-            if (self.port is None) or (self.baud is None):
+            if (self.port is None) or\
+                (SINGLE_HW and (self.baud is None)):
                 return 400
 
             try:
-                self.dpx = dpx.Dosepix(self.port, self.baud, self.config)
-                # dpx_control.Dosepix(PORT, 2e6, CONFIG_FN, thl_calib_files=thl_calib_files, params_file=PARAMS_FILES, bin_edges_file=BIN_EDGES_FILES)
+                if SINGLE_HW:
+                    self.dpx = dpx.Dosepix(
+                        port_name=self.port,
+                        config_fn=self.config
+                    )
+                else:
+                    self.dpx = dpx.Dosepix(
+                        self.port,
+                        self.baud,
+                        self.config
+                    )
             except SerialException as err:
                 return 503
             return True

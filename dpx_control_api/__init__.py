@@ -1,6 +1,8 @@
 import os
 from flask import Flask
 
+SINGLE_HW = True
+
 def main():
     app = create_app()
     app.run()

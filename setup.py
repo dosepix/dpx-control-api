@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(name='dpx_control_api',
-    version='0.1',
+    version='0.2',
     description='API for DPX control software',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -30,6 +30,6 @@ setuptools.setup(name='dpx_control_api',
         'flask',
         'pandas',
         'numpy',
-        'dpx_control'
+        'dpx_control_hw'
     ]
 )

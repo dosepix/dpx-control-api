@@ -33,36 +33,42 @@ def connect():
     # Establish new connection
     if request.method == "POST":
         if ch.is_connected():
-            return Response("Already connected", status=412, mimetype='application/json')
+            return Response("Already connected", status=412,
+                mimetype='application/json')
 
         res = ch.connect()
         if res & (res == 503):
-            return Response("Permission denied", status=503, mimetype='application/json')
-        elif res & (res == 400):
-            return Response("Baud rate or port missing", status=400, mimetype='application/json')
-        elif res:
-            return Response("Successfully connected", status=201, mimetype='application/json')
-        else:
-            return Response("Connection failed", status=505, mimetype='application/json')
+            return Response("Permission denied", status=503,
+                mimetype='application/json')
+        if res & (res == 400):
+            return Response("Baud rate or port missing", status=400,
+                mimetype='application/json')
+        if res:
+            return Response("Successfully connected", status=201,
+                mimetype='application/json')
+        return Response("Connection failed", status=505,
+            mimetype='application/json')
+
     # Disconnect
-    elif request.method == "DELETE":
+    if request.method == "DELETE":
         try:
             if ch.is_connected():
                 res = ch.disconnect()
-                return Response("Device disconnected", status=201, mimetype='application/json')
-            else:
-                return Response("No device connected", status=412, mimetype='application/json')
+                return Response("Device disconnected", status=201,
+                                    mimetype='application/json')
+            return Response("No device connected", status=412,
+                                mimetype='application/json')
         except:
             ch.dpx = None
-            return Response("Disonnect failed, forced disconnect", status=500, mimetype='application/json')
+            return Response("Disonnect failed, forced disconnect",
+                status=500, mimetype='application/json')
 
 @bp.route('/isconnected', methods=["GET"])
 def isconnected():
     res = ch.is_connected()
     if res:
         return Response("Device connected", status=201, mimetype='application/json')
-    else:
-        return Response("Device not connected", status=404, mimetype='application/json')
+    return Response("Device not connected", status=404, mimetype='application/json')
 
 @bp.route('/get_ports', methods=["POST"])
 def get_ports():
