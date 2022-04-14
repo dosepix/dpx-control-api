@@ -41,22 +41,32 @@ def new_measurement():
 
     # Check if required data is provided
     if not all([key in data.keys() for key in ['config_id', 'user_id', 'mode', 'name']]):
-        return Response("Required keys are missing", status=400, mimetype='application/json')
+        return Response(
+            "Required keys are missing",
+            status=400,
+            mimetype='application/json'
+        )
 
     try:
         db.execute(
-            "INSERT INTO measurement (config_id, user_id, mode, name) VALUES (?, ?, ?, ?)", 
+            "INSERT INTO measurement (config_id, user_id, mode, name) VALUES (?, ?, ?, ?)",
             (data['config_id'], data['user_id'], data['mode'], data['name']))
         db.commit()
     except db.IntegrityError as error:
         return Response(error, status=409, mimetype='application/json')
 
-    meas_id = db.execute("SELECT last_insert_rowid() FROM measurement").fetchone()
+    meas_id = db.execute(
+        "SELECT last_insert_rowid() FROM measurement"
+    ).fetchone()
     meas_id = list(dict(meas_id).values())[0]
 
     # Counter for current frame
     FRAME_ID = 0
-    return Response(json.dumps({'meas_id': meas_id}), status=201, mimetype='application/json')
+    return Response(
+        json.dumps({'meas_id': meas_id}),
+        status=201,
+        mimetype='application/json'
+    )
 
 @bp.route('/get_meas_ids_names', methods=["GET"])
 def get_meas_ids_names():
@@ -67,13 +77,27 @@ def get_meas_ids_names():
         mode = request.args.get('mode', type=str)
 
         ret = db.execute(
-            'SELECT id, name FROM measurement WHERE (user_id, mode) IS (?, ?)', (user_id, mode)).fetchall()
+            'SELECT id, name FROM measurement WHERE (user_id, mode) IS (?, ?)',
+            (user_id, mode)
+        ).fetchall()
         ret = [dict(r) for r in ret]
         if not ret:
-            return Response("No entries found", status=404, mimetype='application/json')
+            return Response(
+                "No entries found",
+                status=404,
+                mimetype='application/json'
+            )
     else:
-        return Response("user_id and mode are required", status=406, mimetype='application/json')
-    return Response(json.dumps(ret), status=201, mimetype='application/json')
+        return Response(
+            "user_id and mode are required",
+            status=406,
+            mimetype='application/json'
+        )
+    return Response(
+        json.dumps(ret),
+        status=201,
+        mimetype='application/json'
+    )
 
 # === MEASURE ToT ===
 @bp.route('/tot', methods=["POST", "GET", "DELETE"])
@@ -88,12 +112,19 @@ def measure_tot():
     if request.method == "GET":
         FRAME_ID = 0
         if SINGLE_HW:
-            TOT_GENERATOR = ch.dpx.dpf.measure_tot(use_gui=True)
+            TOT_GENERATOR = ch.dpx.dpm.measure_tot(
+                make_hist=True,
+                use_gui=True
+            )
         else:
             TOT_GENERATOR = ch.dpx.measureToT(slot=1, use_gui=True)
         TOT_HIST = np.zeros((256, 400))
         # hist_gen = random_histogram(np.arange(400))   # Debug
-        return Response("Measurement started", status=201, mimetype='application/json')
+        return Response(
+            "Measurement started",
+            status=201,
+            mimetype='application/json'
+        )
 
     # Get events
     small_pixels = np.asarray(
@@ -131,7 +162,9 @@ def measure_tot():
                                 }),
                             status=200, mimetype='application/json')
                     hist_show = np.sum(
-                        TOT_HIST[np.asarray(request.json['pixels'])], axis=0).tolist()
+                        TOT_HIST[np.asarray(request.json['pixels'])],
+                        axis=0
+                    ).tolist()
                 else:
                     hist_show = np.sum(TOT_HIST, axis=0).tolist()
             else:
@@ -145,7 +178,10 @@ def measure_tot():
                         (request.json['meas_id'], FRAME_ID, idx.item(),
                         frame[idx].item())
                     )
-                db.executemany("INSERT INTO totmode (measurement_id, frame_id, pixel_id, value) VALUES (?, ?, ?, ?)", insert_list)
+                db.executemany(
+                    "INSERT INTO totmode (measurement_id, frame_id, pixel_id, value) VALUES (?, ?, ?, ?)",
+                    insert_list
+                )
                 db.commit()
                 FRAME_ID += 1
 
@@ -172,7 +208,11 @@ def measure_tot():
         if TOT_HIST is not None:
             res = save_tot_hist(bins, TOT_HIST, meas_id)
             if not res:
-                return Response("Failed to store ToT histogram to db", status=500, mimetype='application/json')
+                return Response(
+                    "Failed to store ToT histogram to db",
+                    status=500,
+                    mimetype='application/json'
+                )
 
         TOT_HIST = None
         return Response("Measurement stopped", status=201, mimetype='application/json')
@@ -185,8 +225,13 @@ def save_tot_hist(bins, hist, meas_id):
         for pixel_id, h in enumerate( hist ):
             # Store in database
 
-            insert_list = np.dstack( [[meas_id]*len(bins), [pixel_id]*len(bins), bins, h] )[0]
-            db.executemany("INSERT INTO totmode_hist (measurement_id, pixel_id, bin, value) VALUES (?, ?, ?, ?)", insert_list)
+            insert_list = np.dstack(
+                [[meas_id]*len(bins), [pixel_id]*len(bins), bins, h]
+            )[0]
+            db.executemany(
+                "INSERT INTO totmode_hist (measurement_id, pixel_id, bin, value) VALUES (?, ?, ?, ?)",
+                insert_list
+            )
             db.commit()
     except:
         return False
@@ -201,7 +246,8 @@ def tot_hist():
         pixel_id = request.args.get('pixel_id', type=int)
 
         data = db.execute(
-            'SELECT * FROM totmode_hist WHERE (measurement_id, pixel_id) IS (?, ?)', (meas_id, pixel_id)
+            'SELECT * FROM totmode_hist WHERE (measurement_id, pixel_id) IS (?, ?)',
+            (meas_id, pixel_id)
         ).fetchall()
         data = json.dumps( [dict(d) for d in data] )
         return Response(data, status=200, mimetype='application/json')
@@ -225,14 +271,22 @@ def measure_dosi():
         # Infinite measurement
         if frames <= 0:
             frames = None
-        DOSI_GENERATOR = ch.dpx.measureDose(slot=1, frame_time=frame_time, frames=frames, 
-                                            freq=False, outFn=None, logTemp=False, intPlot=False, 
-                                            conversion_factors=None, use_gui=False)
+        DOSI_GENERATOR = ch.dpx.measureDose(
+            slot=1, frame_time=frame_time, frames=frames, 
+            freq=False, outFn=None, logTemp=False, intPlot=False, 
+            conversion_factors=None, use_gui=False
+        )
         DOSI_HIST = []
-        return Response("Measurement started", status=201, mimetype='application/json')
+        return Response(
+            "Measurement started",
+            status=201,
+            mimetype='application/json'
+        )
 
     # Get events
-    small_pixels = np.asarray([True if pixel % 16 in [0, 1, 14, 15] else False for pixel in np.arange(256)])
+    small_pixels = np.asarray(
+        [True if pixel % 16 in [0, 1, 14, 15] else False for pixel in np.arange(256)]
+    )
     if request.method == "POST":
         if DOSI_GENERATOR is not None:
             frame = np.asarray( next( DOSI_GENERATOR ) )
@@ -249,8 +303,13 @@ def measure_dosi():
                 elif show == "single":
                     # If no pixels were selected, return empty
                     if not request.json['pixels']:
-                        return Response(json.dumps({}), status=200, mimetype='application/json')
-                    hist_show = np.sum(DOSI_HIST, axis=0)[np.asarray(request.json['pixels'])].tolist()
+                        return Response(
+                            json.dumps({}),
+                            status=200,
+                            mimetype='application/json'
+                        )
+                    pixels = np.asarray(request.json['pixels'])
+                    hist_show = np.sum(DOSI_HIST, axis=0)[pixels].tolist()
                 else:
                     hist_show = np.sum(DOSI_HIST, axis=0).tolist()
             else:
@@ -258,13 +317,25 @@ def measure_dosi():
 
             # Store in database
             if request.json['mode'] == 'dosi':
-                db.execute("INSERT INTO dosimode (measurement_id, frame_id, %s) VALUES (%s)" % (', '.join(['bin%d' % b for b in range(16)]), ', '.join(['?'] * 18)), [request.json['meas_id'], FRAME_ID] + np.sum(frame, axis=0).tolist())
+                db.execute(
+                    "INSERT INTO dosimode (measurement_id, frame_id, %s) VALUES (%s)" % (', '.join(['bin%d' % b for b in range(16)]), ', '.join(['?'] * 18)),
+                    [request.json['meas_id'],
+                    FRAME_ID] + np.sum(frame, axis=0
+                ).tolist())
                 db.commit()
                 FRAME_ID += 1
 
             # Return histogram
-            return Response(json.dumps({'bins': bins.tolist(), 'frame': hist_show}), status=200, mimetype='application/json')
-        return Response("Measurement not started", status=405, mimetype='application/json')
+            return Response(
+                json.dumps({'bins': bins.tolist(), 'frame': hist_show}),
+                status=200,
+                mimetype='application/json'
+            )
+        return Response(
+            "Measurement not started",
+            status=405,
+            mimetype='application/json'
+        )
 
     # Stop measurement
     if request.method == "DELETE":
@@ -274,7 +345,11 @@ def measure_dosi():
                 DOSI_GENERATOR = None
             except:
                 DOSI_GENERATOR = None
-        return Response("Measurement stopped", status=201, mimetype='application/json')
+        return Response(
+            "Measurement stopped",
+            status=201,
+            mimetype='application/json'
+        )
 
 # === THL CALIBRATION ===
 @bp.route('/thl_calib', methods=["POST", "GET", "DELETE"])
@@ -283,16 +358,38 @@ def thl_calib():
     global GENERATOR
 
     if request.method == "GET":
-        GENERATOR = ch.dpx.measureADC(1, AnalogOut='V_ThA', perc=False, ADChigh=8191, ADClow=0, ADCstep=1, N=1, fn=None, plot=False, use_gui=True)
-        return Response("Calibration started", status=201, mimetype='application/json')
+        GENERATOR = ch.dpx.dpm.measure_adc(
+            analog_out='v_tha',
+            perc=False,
+            adc_high=8191,
+            adc_low=0,
+            adc_step=1,
+            n_meas=1,
+            out_fn=None,
+            plot=False,
+            use_gui=True
+        )
+        return Response(
+            "Calibration started",
+            status=201,
+            mimetype='application/json'
+        )
 
     if request.method == "POST":
         if GENERATOR is not None:
             try:
                 res = next( GENERATOR )
             except StopIteration:
-                return Response('finished', status=410, mimetype='application/json')
-            return Response(json.dumps(res), status=201, mimetype='application/json')
+                return Response(
+                    'finished',
+                    status=410,
+                    mimetype='application/json'
+                )
+            return Response(
+                json.dumps(res),
+                status=201,
+                mimetype='application/json'
+            )
 
     if request.method == "DELETE":
         if GENERATOR is not None:
@@ -300,7 +397,11 @@ def thl_calib():
                 GENERATOR.close()
             except:
                 GENERATOR = None
-        return Response("THL Calibration stopped", status=201, mimetype='application/json')
+        return Response(
+            "THL Calibration stopped",
+            status=201,
+            mimetype='application/json'
+        )
 
 # === EQUALIZATION ===
 @bp.route('/equal', methods=["POST", "GET", "DELETE"])
@@ -324,7 +425,11 @@ def equalization():
                 resPlot=False,
                 use_gui=True
             )
-        return Response("Equalization started", status=201, mimetype='application/json')
+        return Response(
+            "Equalization started",
+            status=201,
+            mimetype='application/json'
+        )
 
     if request.method == "POST":
         if GENERATOR is not None:
@@ -332,8 +437,16 @@ def equalization():
                 res = next( GENERATOR )
                 print( res )
             except StopIteration as excp:
-                return Response(json.dumps(excp.value), status=200, mimetype='application/json')
-            return Response(json.dumps(res), status=201, mimetype='application/json')
+                return Response(
+                    json.dumps(excp.value),
+                    status=200,
+                    mimetype='application/json'
+                )
+            return Response(
+                json.dumps(res),
+                status=201,
+                mimetype='application/json'
+            )
 
     if request.method == "DELETE":
         if GENERATOR is not None:
@@ -341,4 +454,8 @@ def equalization():
                 GENERATOR.close()
             except:
                 GENERATOR = None
-        return Response("Equalization stopped", status=201, mimetype='application/json')
+        return Response(
+            "Equalization stopped",
+            status=201,
+            mimetype='application/json'
+        )

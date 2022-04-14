@@ -258,14 +258,16 @@ def get_equal_from_id(equal_id):
     data = db.execute(
         'SELECT v_tha, confbits, pixeldac FROM equal WHERE (id) IS (?)', (equal_id,)).fetchone()
     if not data:
-        return Response('Equalization not found', status=404, mimetype='application/json')
-    data = dict(data)
-    return data
+        return None
+
+    return dict(data)
 
 @bp.route('/set_equal', methods=["GET"])
 def set_equal():
     equal_id = request.args.get('equal_id', default=-1, type=int)
     config = get_equal_from_id(equal_id)
+    if config is None:
+        return Response('Equalization not found', status=404, mimetype='application/json')
 
     # Check if device is connected
     if not ch.is_connected():
