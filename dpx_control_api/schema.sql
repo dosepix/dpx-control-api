@@ -29,7 +29,6 @@ CREATE TABLE totmode (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     measurement_id INTEGER NOT NULL,
     frame_id INTEGER NOT NULL,
-    bin INTEGER NOT NULL,
     value INTEGER NOT NULL,
     FOREIGN KEY (measurement_id) REFERENCES measurement (id)
 );
@@ -38,6 +37,7 @@ CREATE TABLE totmode_hist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     measurement_id INTEGER NOT NULL,
     pixel_id INTEGER NOT NULL,
+    bin INTEGER NOT NULL,
     value INTEGER NOT NULL,
     FOREIGN KEY (measurement_id) REFERENCES measurement (id)
 );

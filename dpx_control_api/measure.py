@@ -219,22 +219,21 @@ def measure_tot():
 
 def save_tot_hist(bins, hist, meas_id):
     db = get_db()
-
-    try:
-        # Loop over all pixels
-        for pixel_id, h in enumerate( hist ):
-            # Store in database
-
-            insert_list = np.dstack(
-                [[meas_id]*len(bins), [pixel_id]*len(bins), bins, h]
-            )[0]
-            db.executemany(
-                "INSERT INTO totmode_hist (measurement_id, pixel_id, bin, value) VALUES (?, ?, ?, ?)",
-                insert_list
-            )
-            db.commit()
-    except:
-        return False
+    # Loop over all pixels
+    for pixel_id, hist_entry in enumerate( hist ):
+        # Store in database
+        insert_list = np.dstack(
+            [
+                [meas_id] * len(bins),
+                [pixel_id] * len(bins),
+                bins,
+                hist_entry
+            ])[0]
+        db.executemany(
+            "INSERT INTO totmode_hist (measurement_id, pixel_id, bin, value) VALUES (?, ?, ?, ?)",
+            insert_list
+        )
+        db.commit()
     return True
 
 @bp.route('/tot_hist', methods=["GET"])
